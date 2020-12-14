@@ -11,13 +11,56 @@ git --version >/dev/null || { echo "git is not installed on this system. Install
 [[ ! -d $DATADIR ]] && { mkdir $DATADIR || { echo "Could not create directory $DATADIR" ; exit 1; }; }
 [[ ! -d $CONFDIR ]] && { mkdir $CONFDIR || { echo "Could not create directory $CONFDIR" ; exit 1; }; }
 
+function addFile {
+    full_path=$1
+    linkFile $full_path $BASEDIR$full_path
+}
+
+function addFileReverse {
+    full_path=$1
+    linkFile $BASEDIR$full_path $full_path
+}
+
+function linkFile {
+    path1=$1
+    path2=$2
+    mkdir -p $(dirname $path2)
+    ln $path1 $path2
+    echo "Linked $path1 to $path2"
+}
+
+function missingFiles {
+    path1=$(readlink -f $1)
+    path2=$(readlink -f $2)
+    found=""
+    while IFS= read -r file
+    do
+        if [ ! -f "$path2$file" ]; then
+            found="$found\n$file"
+        fi
+    done < <(cd $path1 && find . -type f | cut -c2-)
+    echo -e $found
+}
+    
+function diffFiles {
+    path1=$(readlink -f $1)
+    path2=$(readlink -f $2)
+    found=""
+    while IFS= read -r file
+    do
+        if [ -f $path2$file ]; then
+            diff $path1$file $path2$file >/dev/null || found="$found\n$file"
+        fi
+    done < <(cd $path1 && find . -type f | cut -c2-)
+    echo -e $found
+}
+  
+
 case "$1" in
 add) shift;
     [ -d $BASEDIR ] || { echo "$0 not initialized for this host. Run \`$0 init\` to do so."; exit 1; }
     full_path=$(readlink -f $1);
-    mkdir -p $BASEDIR/$(dirname $full_path)
-    ln $full_path $BASEDIR$full_path
-    echo "Linked $full_path to $BASEDIR$full_path"
+    addFile $full_path
     ;;
 list) 
     shift;
@@ -35,9 +78,73 @@ init)
     git clone $1 $DATADIR
     [[ -d $BASEDIR ]] || mkdir $BASEDIR
     ;;
+link-all)
+    shift;
+    f="n"
+    case $1 in
+    -f|--force) shift; f="y";;
+    esac
+    other_host=$1
+    dir=$DATADIR/$other_host
+    [ -d $dir ] || { echo "Host $1 has not been initialized for $0. Execute \`$0 init\` on the target machine."; exit 1; }
+    skipped=""
+    not_found=""
+    created=""
+    while IFS= read -r file
+    do
+        if [ ! -f $BASEDIR$file ]; then
+            if [ -f $file ]; then
+                addFile $file;
+            else
+                if [ $f == "y" ]; then
+                  mkdir -p $(dirname $BASEDIR$file)
+                  cp $DATADIR/$other_host$file $BASEDIR$file
+                  addFileReverse $file
+                else
+                  not_found="$not_found\n$file"
+                fi
+            fi
+        else
+            skipped="$skipped\n$file"
+        fi
+    done < <(cd $dir && find . -type f | cut -c2-)
+
+    [ -n "$not_found" ] && echo -e "The following files were not present on the local machine and were ignored:\n${not_found}\n"
+    [ -n "$skipped" ] && echo -e "The following files were already added to $0 and were ignored:\n${skipped}\n"
+    ;;
 delete) 
     echo "not implemented yet"; exit 1;
     ;;
+diff)
+    shift;
+    other_host=$1; [ -z "$other_host" ] && { echo "You need to specify a host to diff with."; exit 1; }
+    [ -d $DATADIR/$other_host ] || { echo "Host $1 has not been initialized for $0. Execute \`$0 init\` on the target machine."; exit 1; }
+    file=$2
+    if [ -z "$file" ]; then
+        m_files1=$(missingFiles $DATADIR/$other_host $BASEDIR)
+        m_files2=$(missingFiles $BASEDIR $DATADIR/$other_host)
+        d_files=$(diffFiles $BASEDIR $DATADIR/$other_host)
+        if [ -n "$m_files1" ]; then
+            echo "Files in $other_host, but not in local:"
+            echo -e "$m_files1"
+            echo
+        fi
+        if [ -n "$m_files2" ]; then
+            echo "Files in local, but not in $other_host:"
+            echo -e "$m_files2"
+            echo
+        fi
+        if [ -n "$d_files" ]; then
+            echo "Files with differences:"
+            echo -e "$d_files"
+            echo
+        fi
+    else
+        echo "we do have file"
+        full_path=$(readlink -f $file)
+        vimdiff $BASEDIR$file $DATADIR/$other_host$file #use something dynamic here
+    fi
+    ;;    
 update)
     cd $DATADIR
     git pull
