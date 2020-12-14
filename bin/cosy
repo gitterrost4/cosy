@@ -39,7 +39,10 @@ delete)
     echo "not implemented yet"; exit 1;
     ;;
 update)
-    git push -f $DATADIR
+    cd $DATADIR
+    git pull
+    git add . && git commit -m "cosy update from `date`"
+    git push -f
     ;;
 *) echo "Unknown Command $1" ; exit 1 ;;
 esac
