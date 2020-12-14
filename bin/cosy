@@ -1,0 +1,46 @@
+#!/bin/bash
+
+APPNAME=cosy
+
+DATADIR=${XDG_DATA_HOME:-$HOME/.local/share}/$APPNAME
+CONFDIR=${XDG_CONFIG_HOME:-$HOME/.config}/$APPNAME
+BASEDIR=$DATADIR/$(hostname)
+
+git --version >/dev/null || { echo "git is not installed on this system. Install it to continue."; exit 1; }
+
+[[ ! -d $DATADIR ]] && { mkdir $DATADIR || { echo "Could not create directory $DATADIR" ; exit 1; }; }
+[[ ! -d $CONFDIR ]] && { mkdir $CONFDIR || { echo "Could not create directory $CONFDIR" ; exit 1; }; }
+
+case "$1" in
+add) shift;
+    [ -d $BASEDIR ] || { echo "$0 not initialized for this host. Run \`$0 init\` to do so."; exit 1; }
+    full_path=$(readlink -f $1);
+    mkdir -p $BASEDIR/$(dirname $full_path)
+    ln $full_path $BASEDIR$full_path
+    echo "Linked $full_path to $BASEDIR$full_path"
+    ;;
+list) 
+    shift;
+    [ -d $BASEDIR ] || { echo "$0 not initialized for this host. Run \`$0 init\` to do so."; exit 1; }
+    if [ -z "$1" ]; then
+        dir=$BASEDIR
+    else
+        dir=$DATADIR/$1
+        [ -d $dir ] || { echo "Host $1 has not been initialized for $0. Execute \`$0 init\` on the target machine."; exit 1; }
+    fi
+    (cd $dir && find . -type f | cut -c2-)
+    ;;
+init) 
+    shift
+    git clone $1 $DATADIR
+    [[ -d $BASEDIR ]] || mkdir $BASEDIR
+    ;;
+delete) 
+    echo "not implemented yet"; exit 1;
+    ;;
+update)
+    git push -f $DATADIR
+    ;;
+*) echo "Unknown Command $1" ; exit 1 ;;
+esac
+
