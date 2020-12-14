@@ -11,6 +11,12 @@ git --version >/dev/null || { echo "git is not installed on this system. Install
 [[ ! -d $DATADIR ]] && { mkdir $DATADIR || { echo "Could not create directory $DATADIR" ; exit 1; }; }
 [[ ! -d $CONFDIR ]] && { mkdir $CONFDIR || { echo "Could not create directory $CONFDIR" ; exit 1; }; }
 
+function help {
+cat <<EOF
+help goes here
+EOF
+}
+
 function addFile {
     full_path=$1
     linkFile $full_path $BASEDIR$full_path
@@ -151,6 +157,11 @@ update)
     git add . && git commit -m "cosy update from `date`"
     git push -f
     ;;
-*) echo "Unknown Command $1" ; exit 1 ;;
+help|--help|-h)
+    help;;
+*) 
+    echo "Unknown Command $1" 
+    help
+    exit 1 ;;
 esac
 
