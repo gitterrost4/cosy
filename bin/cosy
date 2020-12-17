@@ -31,7 +31,7 @@ function linkFile {
     path1=$1
     path2=$2
     mkdir -p $(dirname $path2)
-    ln $path1 $path2
+    ln -f $path1 $path2
     echo "Linked $path1 to $path2"
 }
 
@@ -154,6 +154,10 @@ diff)
 update)
     cd $DATADIR
     git pull
+    while IFS= read -r file
+    do
+        addFileReverse $file
+    done < <(cd $BASEDIR && find . -type f | cut -c2-)
     git add . && git commit -m "cosy update from `date`"
     git push -f
     ;;
